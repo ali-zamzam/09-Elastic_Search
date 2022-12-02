@@ -1,0 +1,565 @@
+***Kibana API****
+
+**This API will allow us to directly query our cluster via a web interface.**
+
+
+1 - Presentation and connection to the Kibana web interface:
+
+(Kibana is the window on the nodes and allows us to interact and perform your requests directly on Elastic cluster.)
+
+**The advantage of Kibana is that it offers:**
+
+- A tool dedicated to requests (dev tool)
+
+- Supports auto-completion, query auto-formatting (headers)
+
+- Keeps your request history directly in your browser's cache. That is to say that even when you close it or 
+decide to reinstall your ES instance, you do not lose the requests already made.
+
+- It is also possible to format our requests in cURL format ("Copy as cURL" option) to execute it on Linux terminal.
+
+
+**connect to Kibana**
+
+From any browser: http://ip_address_of_your_vm:5601
+****my ip: http://52.30.172.188:5601****
+
+(If you use the secure installation, we need to connect with the user name and password.)
+
+(You may have noticed that the connection here is from an http interface and not https. This is because the SSL management
+in our case only manages the encryption between the nodes or API client/node. 
+The Kibana web interface requires a separate certificate to operate over HTTPS. It will also need to be recognized by the 
+browser.it is something to consider when moving to  a production environment and if your stack is accessible on the internet.)
+
+--------------------------------------------------------------------------------------------------------------------------------
+**Dev Tool**
+
+2- Creating an index and managing documents
+
+- Documents are json objects (key/value pairs) containing all the data you want.
+
+- When you index a document, that's mean integrate a document in an index, the original json, the object you sent to 
+Elasticsearch, is stored along with some metadata that Elasticsearch uses internally.
+
+- We are now going to create an index with 2 shards and 2 replicas for each shard as parameters.
+(ES uses the REST standard for communication with ES (GET/POST/PUT/DELETE)).
+
+***To add an index you will have to use the ("PUT") method****
+
+(PUT /products) products is the index
+**********************************
+PUT /products
+{ 
+  
+  "settings" : {
+    "number_of_shards" : 2,
+    "number_of_replicas" : 2
+}
+
+}
+
+output : 
+{
+  "acknowledged" : true,
+  "shards_acknowledged" : true,
+  "index" : "products"
+}
+
+************************************
+**to add a document to the index (use "POST")**
+
+(POST /products/_doc/1) _doc is the document _type ,and the document ID is number 1.
+
+************************************
+POST /products/_doc/1
+{
+    "name" : "Pancake",
+    "price" : 49,
+    "in_stock" : 4
+}
+
+output:
+{
+  "_index" : "products",
+  "_id" : "1",
+  "_version" : 2,
+  "result" : "updated",
+  "_shards" : {
+    "total" : 3,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 1,
+  "_primary_term" : 1
+}
+
+The result returns information including:
+
+- The document id matches the one in the command, if no ID is specified during creation, a random unique ID will be chosen.
+
+- The number of shards and replicas the index has. Here 3 (1 primary shard + 2 replicas)
+
+- The index version number (modification number that the index has had)
+
+- A sequence number intended for the internal management of Elasticsearch, this one is used for concurrent operations 
+(Concurrency Control), that's mean in parallel.
+
+
+
+**You may want to update a field in a document or add a new one:**
+****************************************
+POST /products/_update/1
+{
+  "doc": {
+    "price": 2.99,
+    "tags": [
+      "grocery"
+    ]
+  }
+}
+
+outputs:
+{
+  "_index" : "products",
+  "_id" : "1",
+  "_version" : 4,
+  "result" : "updated",
+  "_shards" : {
+    "total" : 3,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 3,
+  "_primary_term" : 1
+}
+
+*****************************************
+**View document with GET method**
+
+GET /products/_doc/1
+
+output:
+{
+  "_index" : "products",
+  "_id" : "1",
+  "_version" : 4,
+  "_seq_no" : 3,
+  "_primary_term" : 1,
+  "found" : true,
+  "_source" : {
+    "name" : "pancake",
+    "price" : 3.99,
+    "in_stock" : 4,
+    "tags" : [
+      "grocery"
+    ]
+  }
+}
+*********************************************
+add Document id 3
+
+name: bread
+price: 0.99
+stock: 14
+tags: grocery
+
+
+POST /products/_doc/3
+{
+  "name" : "bread",
+  "price" : 0.99,
+  "stock" : 14,
+  "tags": [
+    "grocery"
+  ]
+}
+
+output:
+{
+  "_index" : "products",
+  "_id" : "3",
+  "_version" : 1,
+  "result" : "created",
+  "_shards" : {
+    "total" : 3,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 5,
+  "_primary_term" : 1
+}
+
+*******************************
+To verify if the Documents  were successfully added("_search")
+
+GET /products/_search
+{
+  "took" : 785,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 3,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "products",
+        "_id" : "1",
+        "_score" : 1.0,
+        "_source" : {
+          "name" : "pancake",
+          "price" : 3.99,
+          "in_stock" : 4,
+          "tags" : [
+            "grocery"
+          ]
+        }
+      },
+      {
+        "_index" : "products",
+        "_id" : "2",
+        "_score" : 1.0,
+        "_source" : {
+          "name" : "coffe",
+          "price" : 2,
+          "stock" : 10,
+          "tags" : [
+            "drink"
+          ]
+        }
+      },
+      {
+        "_index" : "products",
+        "_id" : "3",
+        "_score" : 1.0,
+        "_source" : {
+          "name" : "bread",
+          "price" : 0.99,
+          "stock" : 14,
+          "tags" : [
+            "grocery"
+          ]
+        }
+      }
+    ]
+  }
+}
+********************************************
+**modify several documents at once**
+
+You may wish to modify several documents at once. For this you will have to use a "query". 
+A query allows to select and filter the documents of an index.
+
+************************************************************
+set the price to 10 of all products with the "grocery" tag:
+
+POST /products/_update_by_query
+{
+  "script": {
+    "source": "ctx._source.price = 10",
+    "lang": "painless"
+  },
+  "query": {
+    "term": {
+      "tags" : "grocery"
+    }
+  }
+}
+
+output:
+{
+  "took" : 51,
+  "timed_out" : false,
+  "total" : 2,
+  "updated" : 2,
+  "deleted" : 0,
+  "batches" : 1,
+  "version_conflicts" : 0,
+  "noops" : 0,
+  "retries" : {
+    "bulk" : 0,
+    "search" : 0
+  },
+  "throttled_millis" : 0,
+  "requests_per_second" : -1.0,
+  "throttled_until_millis" : 0,
+  "failures" : [ ]
+}
+
+
+*(ctx)* stands for the term "context". ctx is a special variable that lets you access the source of the object you want 
+to update. The ctx._source is a writable version of the source,it means it allows to modify and search fields in an index.
+
+Keep in mind that we can modify a document by filtering its content.
+************************************************************
+
+**Check that prices have changed in the index**
+
+GET /products/_search
+{
+    "_source":["tags", "price"]
+}
+
+output:
+    {
+        "_index" : "products",
+        "_id" : "1",
+        "_score" : 1.0,
+        "_source" : {
+          "price" : 10,
+          "tags" : [
+            "grocery"
+          ]
+        }
+      },
+      {
+        "_index" : "products",
+        "_id" : "3",
+        "_score" : 1.0,
+        "_source" : {
+          "price" : 10,
+          "tags" : [
+            "grocery"
+          ]
+        }
+      }
+    ]
+  }
+}
+***********************************
+**delete the documents with the "grocery" tag using the * delete_by_query method:**
+
+POST /products/_delete_by_query
+{
+    "query":{
+        "term":{
+            "tags":"grocery"
+        }
+    }
+}
+
+output:
+{
+  "took" : 11,
+  "timed_out" : false,
+  "total" : 2,
+  "deleted" : 2,
+  "batches" : 1,
+  "version_conflicts" : 0,
+  "noops" : 0,
+  "retries" : {
+    "bulk" : 0,
+    "search" : 0
+  },
+  "throttled_millis" : 0,
+  "requests_per_second" : -1.0,
+  "throttled_until_millis" : 0,
+  "failures" : [ ]
+}
+
+*********************************
+--------------------------------------------------------------------------------------------------------------------
+3- A few words about the **Optimist Concurrency Control**
+
+- Elasticsearch manages index versions in a node. it is a form of versioning with the addition of metadata primary terms
+ and sequence numbers in the index. Each operation in an index increase the sequence numbers field by 1.
+
+- Elasticsearch uses optimistic concurrency checking with the _primary_term and _seq_no fields.
+
+- This principle is very useful especially during parallel queries. It is essentially a way to prevent(block) an 
+older version of a document from overwriting a newer version.
+
+example:
+- The application launches a request to Elasticsearch to decrement(decrease) the "stock" field. 
+
+This query could also be similar to this one:
+*************************************
+POST /products/_update/2
+{
+  "script": {
+    "source": "ctx._source.stock--"
+  }
+}
+*************************************
+
+- At that exact moment, another visitor completes the checkout flow for the same product, so both threads have 
+theoretically fetched the same product:
+
+- The first query subtracts the "stock" field by 1 via the Elasticsearch API.
+- The second query does the same thing and that's where we run into trouble.
+- The second query thinks it has the last update of the "stock" field, but it has been changed elsewhere.
+- The subtracted value will therefore be incorrect because the second thread will decrement the same product already 
+purchased and therefore no longer in stock.
+- The "stock" field, however, now has a value of five when the value should have been four.
+
+- The consequences of this vary by application, but in this case we could sell products that are not in stock, 
+resulting in a poor customer experience.
+
+
+***How can we prevent this from happening?***
+
+- This is where versioning comes in.
+- The approach is to use the *primary metadata* terms and *sequence numbers* that are included in the results. 
+These fields are named _seq_no and _primary_term respectively.
+
+**A classic query implicitly implies two conditions:**
+
+- The _primary_term is the identifier of the primary shard in the replication group. Generally set to 1, 
+if this changes, it means that the primary shard has changed following an error or "failover" of the replication group.
+
+- The _seq_no is a counter. It lets you know how many operations have been performed on an index in total. 
+(GET/PUT/POST...)
+
+- Elasticsearch will then use these two values to ensure that we don't inadvertently overwrite a document if it 
+has changed since our request.
+
+- We can see this operation through the API with Kibana. Elasticsearch manages these parameters autonomously but 
+it is interesting to visualize them. We start by fetching a document and seeing the main term and sequence number 
+in the results:
+***********************************
+GET /products/_doc/2
+
+output: (_seq_no =4)
+{
+  "_index" : "products",
+  "_id" : "2",
+  "_version" : 1,
+  "_seq_no" : 4,
+  "_primary_term" : 1,
+  "found" : true,
+  "_source" : {
+    "name" : "coffe",
+    "price" : 2,
+    "stock" : 10,
+    "tags" : [
+      "drink"
+    ]
+  }
+}
+
+**********************************
+**We are now going to add the two parameters with two conditions:**
+
+id = 2 so we put (2) after _update/.
+we had the stock =10 
+in this example we want to update the stock by modify by using (?if_primary_term=1&if_seq_no=)
+we had _seq_no =10 after the modification it must be =11
+
+POST /products/_update/2?if_primary_term=1&if_seq_no=10
+
+{
+    "doc" : {
+        "stock" : 9
+    }
+}
+
+output: (we can see _seq_no =11)
+{
+  "_index" : "products",
+  "_id" : "2",
+  "_version" : 3,
+  "result" : "updated",
+  "_shards" : {
+    "total" : 3,
+    "successful" : 1,
+    "failed" : 0
+  },
+  "_seq_no" : 11,
+  "_primary_term" : 1
+}
+
+****************************************
+** if we put a wrong _seq_no**
+
+we had this error
+{
+  "error": {
+    "root_cause": [
+      {
+        "type": "version_conflict_engine_exception",
+        "reason": "[2]: version conflict, required seqNo [13], primary term [1]. current document has seqNo [14] and primary term [1]",
+        "index_uuid": "WL6RGM9ASW6Fx01OkY10uQ",
+        "shard": "0",
+        "index": "products"
+      }
+    ],
+    "type": "version_conflict_engine_exception",
+    "reason": "[2]: version conflict, required seqNo [13], primary term [1]. current document has seqNo [14] and primary term [1]",
+    "index_uuid": "WL6RGM9ASW6Fx01OkY10uQ",
+    "shard": "0",
+    "index": "products"
+  },
+  "status": 409
+}
+
+--------------------------------------------------------------------------------------------------------------------
+4- **Cluster monitoring and node roles**
+
+Monitoring the health of your nodes (nodes) and your cluster is essential, especially when putting your Elasticsearch solution into production. 
+
+Here are some useful commands to monitor your cluster:
+
+# for the cluster
+GET /_cluster/health?
+
+# for indexes
+GET /_cat/shards?v
+
+# health of  indexes ("products" must be present in the index)
+GET /_cat/indices?v
+
+output:
+
+health status index    uuid                   pri rep docs.count docs.deleted store.size pri.store.size
+yellow open   products nStXV7l4R2u-7Q18-bZHcA   2   2          1            0        5kb            5kb
+
+
+**The roles**
+
+Each node has one or more roles. By default nodes are eligible and have all roles. These nodes are able to process our requests in 
+an equivalent way and according to the cluster load.
+
+*************************************
+GET /_cat/nodes?v
+
+output:
+ip         heap.percent ram.percent cpu load_1m load_5m load_15m node.role   master name
+172.18.0.2           50          97   1    0.15    0.08     0.03 cdfhilmrstw *      6fcee19f5513
+
+*************************************
+
+- As you can see, a node has taken the "master" role. The node master is responsible for cluster-wide actions, such as creating or 
+deleting an index, tracking nodes, deciding which shards to allocate and to which nodes. It is important for the health of the cluster 
+to have a stable master node.
+
+***cdfhilmrstw*** corresponds to the first letter of the assigned roles and attributes, denoted respectively:
+c => cold node
+
+d => data node
+
+f => frozen node
+
+h => hot node
+
+i => ingest node
+
+l => machine learning node
+
+m => master-eligible node
+(The node is eligible to take over the role if the current master falls. It is an attribute.)
+
+
+r => remote cluster client node
+
+s => content node
+
+t => transform node
+
+w => warm node

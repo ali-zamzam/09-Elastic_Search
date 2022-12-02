@@ -1,0 +1,789 @@
+https://www.elastic.co/guide/en/elasticsearch/reference/current/search-aggregations.html
+------------------------------------------------------------------------------------------------
+The **size** parameter is the maximum number of hits to return. Together, these two parameters define a page of results.
+if we put size = 0 that's mean we don't want to see the result of query.
+
+Note above the "size" argument which can be passed directly as a query parameter. This is the same operation 
+for all the arguments, like "scroll" for example.
+POST /sales/_search?size=0
+
+
+
+**To get the number of unique values ​​in a field, we use the cardinality clause:**
+
+- (stats): to have (min, max , avg, sum)
+"stats_aggs": {
+      "stats": {
+        "field": "priceUSD"
+-----------------------------------------------------------------------------------------------------------
+***The adataset cars***
+
+- Check the mapping and data of our new index. Reindex it accordingly.
+************************
+GET /cars/_mapping
+
+GET /cars/_search
+{
+  "query":{
+      "match_all":{}
+
+  }
+}
+
+
+PUT /cars_new
+{
+  "settings": {
+    "number_of_shards": 2,
+    "number_of_replicas": 1
+},
+    "mappings" : {
+      "properties" : {
+        "color" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "fuel_type" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "make" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "mileage(kilometers)" : {
+          "type" : "text"
+        },
+        "priceUSD" : {
+          "type" : "float"
+        },
+        "segment" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "transmission" : {
+          "type" : "text",
+          "fields" : {
+            "keyword" : {
+              "type" : "keyword",
+              "ignore_above" : 256
+            }
+          }
+        },
+        "volume(cm3)" : {
+          "type" : "float"
+        },
+        "year" : {
+          "type": "date",
+        "format": "yyyy"
+        
+        }
+      }
+    }
+  }
+
+****************************************************************
+# Reindex
+
+POST /_reindex?wait_for_completion=false
+{
+  "source": {
+    "index": "cars"
+  },
+  "dest": {
+    "index": "cars_new"
+  }
+}
+
+# Delete previous index
+
+DELETE /cars
+
+***********************************
+# create _aliases
+
+POST _aliases
+{
+  "actions": [
+    {
+      "add": {
+        "index": "cars_new",
+        "alias": "cars"
+      }
+    }
+  ]
+}
+
+***********************************
+--------------------------------------------------------------------------------------------------------------------------------
+
+***1- Aggregations***
+
+**Aggregations are a way to group and extract statistics and summaries from your data in a logical way:**
+
+**********************************************************************************************
+Order A                 Order B                  Order C                  Order D 
+
+Product A              Product A                Product B                Product B
+Amount = 50            Amount = 20              Amount = 10              Amount = 75
+******                 ********                  ********                 ********
+   ***                 ***                        ***                     ***
+     ***             ***                            ***                 ***
+
+        Product A                                         Product B   
+
+Total Amount(sum) = 70                                 Total Amount(sum) = 85
+
+Average Amount(sum) = 35                               Average Amount(sum) = 42.5
+
+**********************************************************************************************
+
+**Suppose we want to retrieve statistics on our sales prices for our vehicles. Here is how aggregations are 
+constructed in general:**
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "total_price": {
+      "sum": {
+        "field": "priceUSD"
+      }
+    },
+    "avg_price": {
+      "avg": {
+        "field": "priceUSD"
+      }
+    },
+    "min_price": {
+      "min": {
+        "field": "priceUSD"
+      }
+    },
+    "max_price": {
+      "max": {
+        "field": "priceUSD"
+      }
+    }
+  }
+}
+
+- The size parameter allows to specify that no query results should be displayed, we only want the aggregations.
+
+- The aggs parameter can be named arbitrarily. This is the subject of the custom query. It is the same with min_price, avg_price ext.. 
+The names must be explicit for the display of the answer.
+****************************************************************
+**We can gather the statistics in a few lines with this query:**
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "value_count":{
+      "value_count": {
+        "field": "priceUSD"
+      }
+    },
+    "price_stats":{
+      "stats": {
+        "field": "priceUSD"
+      }
+    },
+    "extend_stats_price":{
+      "extended_stats": {
+        "field": "priceUSD"
+      }
+    }
+  }
+}
+
+output:
+{
+  "took" : 0,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "extend_stats_price" : {
+      "count" : 50849,
+      "min" : 48.0,
+      "max" : 170000.0,
+      "avg" : 7266.494778658381,
+      "sum" : 3.69493993E8,
+      "sum_of_squares" : 5.743992807611E12,
+      "variance" : 6.015981900786375E7,
+      "variance_population" : 6.015981900786375E7,
+      "variance_sampling" : 6.0161002138350844E7,
+      "std_deviation" : 7756.27610441143,
+      "std_deviation_population" : 7756.27610441143,
+      "std_deviation_sampling" : 7756.352373271269,
+      "std_deviation_bounds" : {
+        "upper" : 22779.04698748124,
+        "lower" : -8246.057430164481,
+        "upper_population" : 22779.04698748124,
+        "lower_population" : -8246.057430164481,
+        "upper_sampling" : 22779.19952520092,
+        "lower_sampling" : -8246.209967884159
+      }
+    },
+    "price_stats" : {
+      "count" : 50849,
+      "min" : 48.0,
+      "max" : 170000.0,
+      "avg" : 7266.494778658381,
+      "sum" : 3.69493993E8
+    },
+    "value_count" : {
+      "value" : 50849
+    }
+  }
+}
+
+Note "extended_stats", which allows you to have a complete visualization of the chosen field
+****************************************************************
+**unique values**
+
+To get the number of unique values ​​in a field, we use the cardinality clause:
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "unique_makes": {
+      "cardinality": {
+        "field": "make.keyword"
+      }
+    }
+  }
+}
+
+output:
+{
+  "took" : 32,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "unique_makes" : {
+      "value" : 51
+    }
+  }
+}
+
+************************************************
+
+You can also do aggregations by terms:
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "colors_agg": {
+      "terms": {
+        "field": "color.keyword",
+        "size": 20,
+        "order": {
+          "_key": "asc"
+        }
+      }
+    }
+  }
+}
+
+
+the first size = 0 to not have the result like
+{
+  "took" : 9,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "cars_new",
+        "_id" : "HDDXvYMBIdQjxr0sdPP4",
+        "_score" : 1.0,
+        "_source" : {
+          "make" : "mazda",
+          "priceUSD" : "5500",
+          "year" : "2008",
+          "mileage(kilometers)" : "162000.0",
+          "fuel_type" : "petrol",
+          "volume(cm3)" : "1500.0",
+          "color" : "burgundy",
+          "transmission" : "mechanics",
+          "segment" : "B"
+        }
+      },
+
+
+and the seconde size = 0  (to have the number of colors for 20 result)
+
+{
+          "key" : "silver",
+          "doc_count" : 9227
+        },
+        {
+          "key" : "white",
+          "doc_count" : 4734
+        },
+        {
+          "key" : "yellow",
+          "doc_count" : 258
+
+*(For this command to work, we must use the keyword attribute that we defined during the mapping. 
+Text fields are not supported for aggregations.)*
+
+
+************************************************************************************************
+**nested aggregations**
+
+You can also run "nested aggregations" or "buckets", this method is very useful when you want to refine your 
+search and have statistics on intervals:
+
+- (stats): to have (min, max , avg, sum)
+"stats_aggs": {
+      "stats": {
+        "field": "priceUSD"
+
+GET /cars/_search
+{
+  "size": 0,
+  "query": {
+    "range": {
+      "priceUSD": {
+        "gte": 1000,
+        "lte": 5000
+      }
+    }
+  },
+  "aggs": {
+    "make_agg": {
+      "terms": {
+        "field": "make.keyword",
+        "size": 55
+      }
+    },
+    "stats_aggs": {
+      "stats": {
+        "field": "priceUSD"
+      }
+    }
+  }
+}
+
+************************************************************************************************
+**if we don't have a big number of observations**
+
+Some brands have very little observation, which can bias our analysis. We can specify a minimum number of 
+observations required for our aggregation with the min_doc_count clause
+ {
+          "key" : "suzuki",
+          "doc_count" : 70
+        },
+        {
+          "key" : "lancia",
+          "doc_count" : 67
+        },
+        {
+          "key" : "saab",
+          "doc_count" : 66
+        },
+        {
+          "key" : "uaz",
+          "doc_count" : 57
+        },
+
+so:  
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "agg_make": {
+      "terms": {
+        "field": "make.keyword",
+        "size": 30,
+        "min_doc_count": 1000
+      }
+    }
+  }
+}
+
+
+output:
+
+     "key" : "renault",
+          "doc_count" : 3295
+        },
+        {
+          "key" : "peugeot",
+          "doc_count" : 2849
+        },
+        {
+          "key" : "ford",
+          "doc_count" : 2738
+        },
+        {
+          "key" : "nissan",
+          "doc_count" : 1921
+        },
+
+************************************************************************************************
+- A dealer wishes to learn about the market of foreign manufacturers for a future investment. He wishes to have the basic 
+statistics of the vehicles for each year and according to its type of energy.
+
+- Create a query that meets the need of this dealer. Only foreign manufacturers should be present. To do this, you can 
+use the bool clause and filter the "peugeot", "citroen", "renault" brands.
+
+- Create a bucket that contains the aggregations of the type of energy used ("fuel_type" field) and make a group by price.
+
+GET /cars/_search
+{
+  "size": 0,
+  "query": {
+    "bool": {
+      "must_not": [
+        {
+          "terms": {
+            "make.keyword": [
+              "peugeot",
+              "citroen",
+              "renault"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "aggs": {
+    "agg_year": {
+      "terms": {
+        "field": "year",
+        "size": 50
+      },
+      "aggs": {
+        "agg_fuel": {
+          "terms": {
+            "field": "fuel_type.keyword"
+          },
+          "aggs": {
+            "agg_price": {
+              "stats": {
+                "field": "priceUSD"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+output:
+
+          "key" : 1167609600000,
+          "key_as_string" : "2007", # (year)
+          "doc_count" : 2196,
+          "agg_fuel" : {
+            "doc_count_error_upper_bound" : 0,
+            "sum_other_doc_count" : 0,
+            "buckets" : [
+              {
+                "key" : "petrol",    # (fuel type)
+                "doc_count" : 1358,
+                "agg_price" : {       # (price(stats))
+                  "count" : 1358,
+                  "min" : 650.0,
+                  "max" : 41000.0,
+                  "avg" : 7963.240795287187,
+                  "sum" : 1.0814081E7
+                }
+              }
+
+-----------------------------------------------------------------------------------------------------------
+**2- Histograms**
+
+You can obtain the distribution of a field thanks to the histograms included in Elasticsearch:
+
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "price_distribution": {
+      "histogram": {
+        "field": "priceUSD",
+        "interval": 5000,
+        "min_doc_count": 0
+      }
+    }
+  }
+}
+        {
+          "key" : 0.0,
+          "doc_count" : 24242
+        },
+        {
+          "key" : 5000.0,
+          "doc_count" : 14540
+        },
+        {
+          "key" : 10000.0,
+          "doc_count" : 6967
+        },
+        {
+          "key" : 15000.0,
+          "doc_count" : 2682
+        },
+        {
+          "key" : 20000.0,
+          "doc_count" : 1082
+        },
+        {
+          "key" : 25000.0,
+          "doc_count" : 484
+        },
+        {
+          "key" : 30000.0,
+          "doc_count" : 238
+
+************************************************************************************************
+**If your index contains a field in date format, you can build a histogram based on these: 
+(This is not the case for your dataset, however.)**
+
+POST /sales/_search?size=0
+{
+  "aggs": {
+    "sales_over_time": {
+      "date_histogram": {
+        "field": "date",
+        "fixed_interval": "30d"
+      }
+    }
+  }
+}
+-----------------------------------------------------------------------------------------------------------
+**3- Management of missing values ​​and update**
+
+To better understand how handling of missing values ​​works, run this script to generate "NULL" values:
+
+
+**This query filters the "make" field and replaces "mazda" with a null value**
+
+POST cars/_update_by_query
+{
+  "script": {
+    "source": "ctx._source.make = null",
+    "lang": "painless"
+  },
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "term": {
+            "make.keyword": {
+              "value": "mazda"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+****************************************************************
+
+A null value cannot be indexed or searched. When a field evaluates to "null", it is treated as if it had 
+no value and will return no results.
+
+GET cars/_search
+{
+  "query": {
+    "term": {
+      "make.keyword": "null"
+    }
+  }
+}
+
+output:
+{
+  "took" : 0,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 0,
+      "relation" : "eq"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  }
+}
+
+************************************************************************************************
+
+***found null*** 
+
+(https://elasticsearchbook.com/learn-elasticsearch/missing-vs-empty-fields-99b95a21f39645d6a1ad920593eb705c)
+
+However, you can do statistical analysis and aggregations on null values:
+
+GET /cars/_search
+{
+  "size": 0,
+  "aggs": {
+    "find_missing": {
+      "missing": {
+        "field": "make.keyword"
+      },
+      "aggs": {
+        "missing_sum": {
+          "terms": {
+            "field": "color.keyword",
+            "size": 30
+          }
+        }
+      }
+    }
+  }
+}
+
+output ( 1837 missing vale and we can see the number of colors missing values  )
+{
+  "took" : 14,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : null,
+    "hits" : [ ]
+  },
+  "aggregations" : {
+    "find_missing" : {
+      "doc_count" : 1837,
+      "missing_sum" : {
+        "doc_count_error_upper_bound" : 0,
+        "sum_other_doc_count" : 0,
+        "buckets" : [
+          {
+            "key" : "silver",
+            "doc_count" : 368
+          },
+          {
+            "key" : "blue",
+            "doc_count" : 272
+          },
+          {
+            "key" : "black",
+            "doc_count" : 248
+          },
+          {
+            "key" : "gray",
+            "doc_count" : 212
+          },
+          {
+            "key" : "green",
+            "doc_count" : 152
+          },
+          {
+            "key" : "red",
+            "doc_count" : 148
+          },
+          {
+            "key" : "white",
+            "doc_count" : 140
+          },
+          {
+            "key" : "other",
+            "doc_count" : 132
+          },
+          {
+            "key" : "burgundy",
+            "doc_count" : 104
+          },
+          {
+            "key" : "purple",
+            "doc_count" : 35
+          },
+          {
+            "key" : "brown",
+            "doc_count" : 20
+          },
+          {
+            "key" : "yellow",
+            "doc_count" : 4
+          },
+          {
+            "key" : "orange",
+            "doc_count" : 2
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,797 @@
+***To create a new index:***
+- GET/file.csv/_mapping
+- we see the mapping (we copy it and we modify the type)
+type = text by default (so we change to float or integer if we had a nuleric column etc..)
+- when we change to float or integer or year (yyyy) we delete the:
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+
+- foe date:
+"Date": {
+        "type": "date",
+        "format": "dd-MM-yyyy"
+--------------------------------------------------------------------------------
+***Text mapping and analysis(Mapping et analyse de texte)***
+
+**ou can check the progress of the task like this: **
+
+-GET _tasks?actions=*reindex&detailed
+
+- If we had not instantiated the "wait_for_completion" argument to "false", the API response would have returned 
+a timeout error 504. Although the task would have been taken into account in the backlog by assigning a "task id "
+************************
+- Implicit/explicit mapping 
+- mappings: to instantiate the global schema of our new index.
+- properties: to modify the attributes of the mapping and update them. There is also a second properties field, 
+we have in this mapping a “nested object”, that's mean a sub-category of the mapping with the animator field. 
+
+
+**The "type": clause is used to specify the nature of the value. We find in particular:**
+
+- a text type for textual data in general, these are the fields that will be used by the parsers and the NLP 
+algorithm included in ES.
+
+- an integer type for whole numbers. There are also types: floats, dates, boolean, binary... 
+You will find the list of types and their characteristics here. They are similar to SQL types.
+- (list of types (https://www.elastic.co/guide/en/elasticsearch/reference/current/sql-data-types.html))
+
+- a keyword type for keywords. They are used for keyword research, they are often IDs, a product reference 
+(not a general reference), a telephone number. The major difference with the "text" type is that you do not 
+process text with a "keyword" field.
+
+***Each field must contain a type and that this field will be treated differently depending on it by Elasticsearch.*** 
+***This is why it will always be preferable to create the mapping by hand.***
+
+***It is not possible to change the type of an already existing mapping (example: change the type Int to text) 
+and those for several reasons:***
+
+- The complexity of reindexing all the data.
+- The routing system brought by Elasticsearch to balance the documents within the different shards.
+- Access to data if the solution is in production.
+
+
+***In most cases, we will direct this type of approach towards re-indexing. Reindexing allows us to copy our 
+data into a new index that we are going to create. It is an operation that is carried out in parallel and 
+with a shorter service interruption time.***
+
+**************************
+
+
+- mapping and text analysis. The mapping allows Elasticsearch to know and specify the format 
+of our data: string, integer, float, date..
+
+- It is the mapping that will condition the way Elasticsearch will process our data. 
+This data can be of text, numeric and date type. Text analysis or an analyzer is used 
+to process textual data. 
+
+**Here is an example of a classic pipeline:**
+
+(Source Text --> Character Filters --> Tokenizers --> Token filters --> Terms)
+
+- tThe goal of the analyzer is to store the values in a search-efficient data structure.
+
+------------------------------------------------------------------------------------------------
+***Mapping***
+
+**Implicit/explicit mapping and types**
+
+
+By default when adding a document to a new index, Elasticsearch automatically assigns a type for our field. 
+
+************************************************************
+You can consult the mapping of an index via this command:
+
+GET /products/_mapping
+
+output:
+{
+  "products": {
+    "mappings": {
+      "properties": {
+        "in_stock": {
+          "type": "long"
+        },
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "price": {
+          "type": "long"
+        },
+        "stock": {
+          "type": "long"
+        },
+        "tags": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+Here you can see that each type has been assigned automatically, it is thanks to the 
+fact that Elasticsearch uses a coercion algorithm (implicit mapping) according to the 
+input data.
+
+(The coercion is performed on input before storing the data in the form of a document.)
+*************************************************************
+
+- However, it will always be preferable to configure the mapping of our index manually 
+BEFORE adding a document. (That is to create an **explicit mapping**.)
+- Even with the explicit mapping, the coercion algorithm will still be useful in case 
+the data needs to be transformed to match the mapping we have chosen.
+
+
+*To create an index with an explicit mapping, here is an example:*
+********************************************
+PUT /masterclass
+{
+  "mappings": {
+    "properties": {
+      "theme": {
+        "type": "text"
+      },
+      "duration": {
+        "type": "integer"
+      },
+      "level": {
+        "type": "text"
+      },
+      "animator": {
+        "properties": {
+          "first_name": {
+            "type": "text"
+          },
+          "last_name": {
+            "type": "text"
+          },
+          "email": {
+            "type": "keyword"
+          }
+        }
+      }
+    }
+  }
+}
+
+Notice here the fields used to declare our mapping:
+
+mappings: to instantiate the global schema of our new index.
+properties: to modify the attributes of the mapping and update them. There is also a second properties field, 
+we have in this mapping a “nested object”, that's mean a sub-category of the mapping with the animator field. 
+
+***********************************************************************
+To better understand this, 
+consider this alternative script with a single properties field:
+
+
+PUT /masterclass
+{
+  "mappings": {
+    "properties": {
+      "theme": {
+        "type": "text"
+      },
+      "duration": {
+        "type": "integer"
+      },
+      "level": {
+        "type": "text"
+      },
+      "animator.first_name": {
+        "type": "text"
+      },
+      "animator.last_name": {
+        "type": "text"
+      },
+      "animator.email": {
+        "type": "keyword"
+      }
+    }
+  }
+}
+
+********************************************************************************
+
+***Ingest data and remapping***
+
+- ingest data through Python's Elasticsearch library. This allows you to import and process thousands of data with just
+a few lines of code.
+
+- Its role is very similar to that of Logstash(collect, process and transmit data from any source and machine via pipelines). 
+However, Logstash fits better in a production context and is much more complete than the Python API
+
+To download the file:
+wget https://dst-de.s3.eu-west-3.amazonaws.com/elasticsearch_fr/datasets/EmployerReviews.csv
+
+*The dataset contains reviews and ratings from former employees of thousands of companies since the end of 2011.*
+
+- We will now have to transform and send this data to our cluster. 
+To do this, copy the script below into a ***bulk_script.py*** file
+************************************************************************************
+nano bulk_script.py
+
+#! /usr/bin/python
+from elasticsearch import Elasticsearch, helpers
+import csv
+
+# Connexion to cluster
+es = Elasticsearch(hosts = "http://@localhost:9200")
+
+# Uncomment this command if you are using the secure installation with 3 nodes
+
+*****#es = Elasticsearch(hosts = "https://elastic:datascientest@localhost:9200",ca_certs="./ca/ca.crt")*****
+
+
+with open('EmployerReviews.csv', encoding='utf-8') as f:
+    reader = csv.DictReader(f)
+    helpers.bulk(es, reader, index='reviews')
+
+******
+The reader defines the type of our data, what the API will send in a helper. 
+The bulk helper means a sequential scan of all the lines of our data.
+************************************************************************************
+
+- Then run the script in your machine like this:
+
+#create folder
+- mkdir elasticsearch
+
+# enter the folder
+- cd elasticsearch
+
+#give the rights 
+- sudo chmod +x ./bulk_script.py
+
+#Installation  python
+- pip3 install elasticsearch
+
+#Execute script
+- python3 ./bulk_script.py
+
+***now we can open the cluster on kibana and we will see our dataset**
+
+************************************************************************************
+*View the mapping of your new imported index*
+
+- GET /reviews/_mapping
+
+output:
+
+{
+  "reviews": {
+    "mappings": {
+      "_meta": {
+        "created_by": "file-data-visualizer"
+      },
+      "properties": {
+        "column1": {
+          "type": "text"
+        },
+        "column10": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+
+***As you can see, the auto-coercion assigned type "text" on all fields which is not at all optimal.***
+
+************************************************************************************
+**To realize this, display some documents from our index:**
+GET /reviews/_search
+{
+  "query": {
+    "match_all": {}
+  }
+
+{
+  "took": 2,
+  "timed_out": false,
+  "_shards": {
+    "total": 1,
+    "successful": 1,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 10000,
+      "relation": "gte"
+    },
+    "max_score": 1,
+    "hits": [
+      {
+        "_index": "reviews",
+        "_id": "vSs1uoMBvcTLWPyHe__m",
+        "_score": 1,
+        "_source": {
+          "column1": "ReviewTitle,CompleteReview,Rating,Date"
+        }
+      },
+      {
+        "_index": "reviews",
+        "_id": "vis1uoMBvcTLWPyHe__m",
+        "_score": 1,
+        "_source": {
+          "column1": """Productive,"Good company, cool workplace, work load little bit higher. 
+          Clean environment, disciplined, good cantin, big campus, systematic workflow, lenient 
+          but reliable firm.",3,30-08-2021"""
+        }
+
+
+The request is quite explicit: we display all the fields without any condition. 
+The "Date" field does not have the correct format, so does the "Rating" field.
+
+- review: Clean environment, disciplined, good cantin, big campus, systematic workflow, lenient 
+          but reliable firm.
+-rating : ,3,
+- date : 30-08-2021"""
+
+************************************************************************************************
+
+Let's look at this field and its "fields" parameter:
+
+- GET /reviews/_mapping
+
+"ReviewTitle" : {
+        "type" : "text",
+        "fields" : {
+          "keyword" : {
+            "type" : "keyword",
+            "ignore_above" : 256
+          }
+        }
+     }
+
+- It is often useful to index the same field in different ways for different purposes. This is the purpose of multi-fields. 
+For example, a string field can be mapped as a "text" field for full-text search and a "keyword" field for sorting or 
+aggregations. Although this type of mapping affects performance, it can be very useful to use it in some cases.
+
+- "ignore_above" allows you to specify a limit on the number of characters in the search. This means that during a keyword 
+search, all string fields longer than 256 characters will not be returned.
+
+- This parameter improves performance, because when searching by keyword, Elasticsearch scans all the words sequentially and it 
+can become very long if the fields are composed of long strings of characters.
+
+- In the case of the ReviewTitle field we will not need it because the values ​​are composed of only a few words. For the 
+CompleteReview field it may be relevant to use it because the sentences are much longer. Note that this setting only affects 
+keyword searching
+
+- Reminder: the "text" field is processed by an analyzer (tokenizer, token filter, etc.) and displays the results afterwards, 
+whereas this is not the case for the "keyword" field. As a result, we will be able to carry out specific searches on the text 
+type fields, unlike the keyword type field, where we will want to match the keyword entirely.
+
+- We will therefore use multi-fields to reindex our index accordingly for these two fields.
+
+- Before being able to reindex our dataset, it will have to be defined with the correct mapping.
+
+************************************************************************************************************
+Create a new reviews_new index with the correct data formats. The field names will be similar to the old index. 
+You will choose to create your index on 2 shards and 1 replica
+
+Add a format type argument for the date type otherwise it won't work:
+"format": "dd-MM-yyyy"
+
+PUT /reviews_new
+{
+  "settings": {
+    "number_of_shards": 2,
+    "number_of_replicas": 1
+},
+  "mappings": {
+    "properties": {
+      "CompleteReview": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "Date": {
+        "type": "date",
+        "format": "dd-MM-yyyy"
+      },
+      "Rating": {
+        "type": "integer"
+      },
+      "ReviewTitle": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword"
+          }
+        }
+      }
+    }
+  }
+}
+
+************************************************************************************************************
+Now that your new index is ready, we can reindex our review index to review_new. 
+This index contains more than 200,000 documents, so it is quite a heavy task to perform. 
+
+**You can tell Elasticsearch not to wait for feedback from the API.**
+
+POST _reindex?wait_for_completion=false
+{
+  "source": {
+    "index": "reviews"
+  },
+  "dest": {
+    "index": "reviews_new"
+  }
+}
+************************************************************************************************************
+Delete reviews index with DELETE method
+
+DELETE /reviews
+************************************************************************************************************
+--------------------------------------------------------------------------------------------------------------------------------
+***2- Analyzers***
+
+***************
+You can define an analyzer in the index, it applies to all fields. To add an analyzer:
+
+- close index
+
+- Set Analyzer
+
+- Reopen the index if this index already exists.
+
+- Check configured analyzer
+****************
+
+- Elasticsearch is historically known for its performance in terms of text search. To store text type fields. 
+ES splits the phrase into tokens and stores them in inverted indexes. Thus, the better the tokens are indexed, 
+the easier and more efficient the search for a document will be.
+
+-An analyzer is just a set that contains three elements: ***character filters, tokenizers and token filters***. 
+There are built-in analyzers that are suitable for different languages, different types of text and common usage. 
+Elasticsearch also offers parameters and methods to define new custom analyzers.
+
+
+***Here is how an analyzer breaks down:***
+
+****************** Analyzer ******************
+
+Char filters  --> Tokenizer --> Token filters
+**********************************************
+
+****Char Filters:****
+
+- A character filter **receives the original text** as a stream and can transform that stream by adding, removing, 
+or modifying characters. For example, a filter can be used to convert Hindu-Arabic numerals (٠١٢٣٤٥٦٧٨٩) 
+to their Arabic-Latin equivalents (0123456789), or to remove HTML elements such as tags. 
+An analyzer can have zero or more character filters, which are applied in order.
+
+***Tokenizers:***
+
+- A tokenizer receives a stream of characters, breaks it down into individual tokens (usually individual words) and produces
+ a stream of tokens. For example, a space token breaks text into tokens as soon as it sees a space. It converts the 
+ text "Welcome to Datascientest!" in terms ["Welcome", "to", "Datascientest!"].
+
+- The tokenizer is also responsible for recording the order or position of each term in a list. A analyzer must have exactly
+ one tokenizer.
+
+***Token Filters:***
+
+- A token filter receives the token stream and can add, delete or change tokens. For example, a lowercase token filter
+ converts tokens to lowercase, a stop words token filter removes common words (stop words) like le,la... 
+ from the token stream, and a synonym token filter introduces synonyms in the token stream.
+
+
+**Built-in analyzers**
+Text analysis is automatic during queries on an index, if they are not explicit, the default parameters are applied. 
+That is to say a "standard" analyzer
+
+example:
+*******************************************************************************************************
+POST /_analyze
+{
+  "text": ["Welcome to the GREAT woooorld of ... Datascience !!! :)"],
+  "analyzer": "standard"
+}
+
+output:
+{
+  "tokens": [
+    {
+      "token": "welcome",
+      "start_offset": 0,
+      "end_offset": 7,
+      "type": "<ALPHANUM>",
+      "position": 0
+    },
+    {
+      "token": "to",
+      "start_offset": 8,
+      "end_offset": 10,
+      "type": "<ALPHANUM>",
+      "position": 1
+    },
+    {
+      "token": "the",
+      "start_offset": 11,
+      "end_offset": 14,
+      "type": "<ALPHANUM>",
+      "position": 2
+    },
+    {
+      "token": "great",
+      "start_offset": 15,
+      "end_offset": 20,
+      "type": "<ALPHANUM>",
+      "position": 3
+    },
+    {
+      "token": "woooorld",
+      "start_offset": 21,
+      "end_offset": 29,
+      "type": "<ALPHANUM>",
+      "position": 4
+    },
+    {
+      "token": "of",
+      "start_offset": 30,
+      "end_offset": 32,
+      "type": "<ALPHANUM>",
+      "position": 5
+    },
+    {
+      "token": "datascience",
+      "start_offset": 37,
+      "end_offset": 48,
+      "type": "<ALPHANUM>",
+      "position": 6
+    }
+  ]
+}
+
+The method returns the result passed in our 3 elements of the analyzer as well as the position of each token in the list. 
+Note that this method is useful for testing purposes. An analyzer is mainly used for queries, ie text search. 
+Its parameters are defined in an index.
+*********************************************************************************************
+
+***You can define an analyzer in the index, it applies to all fields. To add an analyzer:***
+
+- close index
+
+- Set Analyzer
+
+- Reopen the index if this index already exists.
+
+- Check configured analyzer
+***********************************************************
+**close index**
+
+POST /reviews_new/_close
+
+**Set Analyzer**
+
+PUT /reviews_new/_settings
+{
+  "settings": {
+    "analysis": {
+      "analyzer": {
+        "std_english": {
+          "type":      "simple",
+          "stopwords": "_english_"
+        }
+      }
+    }
+  }
+}
+
+
+**Reopen the index**
+
+POST /reviews_new/_open
+
+**Check configured analyzer**
+
+GET /reviews_new/_settings
+
+output:
+{
+  "reviews_new": {
+    "settings": {
+      "index": {
+        "routing": {
+          "allocation": {
+            "include": {
+              "_tier_preference": "data_content"
+            }
+          }
+        },
+        "number_of_shards": "2",
+        "provided_name": "reviews_new",
+        "creation_date": "1665282061413",
+        "analysis": {
+          "analyzer": {
+            "std_english": {
+              "type": "simple",
+              "stopwords": "_english_"
+            }
+          }
+        },
+        "number_of_replicas": "1",
+        "uuid": "dQ7MCaJ0Tm-PuulFoQoKKA",
+        "version": {
+          "created": "8040399"
+        }
+      }
+    }
+  }
+}
+
+
+You can apply an analyzer only to a particular field. It will therefore not be possible to do this in an already 
+existing field for internal management reasons at Elasticsearch. It will therefore be necessary to go through a 
+reindexing and specify the analyzer that will be needed next.
+
+(list of analyzers(https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-analyzers.html))
+*************************************************************************************************************
+
+**Modification des analyzers built-in et custom analyzers**
+
+(https://www.elastic.co/guide/en/elasticsearch/reference/current/analysis-charfilters.html)
+
+*If we wanted to reconstruct the standard analyzer, we could write this:*
+*********************
+GET /_analyze
+{
+  "text": "Welcome to the GREAT woooorld of ... Datascience!!! :)",
+  "char_filter": [],
+  "tokenizer": "standard",
+  "filter": ["lowercase"]
+}
+**********************
+
+example:
+*********************
+"I''m a
+<h1>great</h1>
+teacher - and I <strong>love</strong> apprendre 数据科学!"
+
+GET /_analyze
+{
+  "tokenizer": "standard",
+  "char_filter": [
+    "html_strip"
+  ],
+  "I''m a
+<h1>great</h1>
+teacher - and I <strong>love</strong> apprendre 数据科学!"
+}
+*********************
+
+Replace characters "数据科学" with "datascience"
+
+we can do it like this example:
+*************************
+GET /_analyze
+{
+  "char_filter": [
+    {
+      "type": "mapping",
+      "mappings": [
+        "١ => 1",
+        "٤ => 4",
+        "٩ => 9"
+      ]
+    }
+  ],
+  "tokenizer": "standard",
+  "text": "I was born in ١٩٩٤"
+}
+
+# Réponse : [ I was born in 1994 ]
+
+
+*********************************
+GET /_analyze
+{
+  "char_filter": [
+    {
+      "type": "mapping",
+      "mappings": [
+        "数据科学" => "datascience"
+      ]
+    }
+  ],
+  "tokenizer": "standard",
+  "text": "I was born in ١٩٩٤"
+}
+
+# Réponse : [ I was born in 1994 ]
+*************************************************
+
+so the example now:
+"I''m a
+<h1>great</h1>
+teacher - and I <strong>love</strong> apprendre 数据科学!"
+
+
+GET /_analyze
+{
+  "char_filter": [
+    {
+      "type": "mapping",
+      "mappings": [
+        "数据科学 => datascience"
+      ]
+    },
+    "html_strip"
+  ],
+  "tokenizer": "standard",
+  "filter": [
+    "lowercase",
+    "asciifolding"
+  ],
+  "text": "I'm à <h1>great</h1> teacher - and I <strong>love</strong> apprendre 数据科学!"
+}
+
+******************************************************
+ther's a word in frensh so we need to did a custom analyzers
+to do a sustom analyzer we use (PUT)
+
+PUT /custom_analyzer
+{
+  "settings": {
+    "analysis": {
+      "filter": {
+        "custom_stop": {
+          "type": "stop",
+          "stopwords": [
+            "apprendre"
+          ],
+          "ignore_case": true
+        }
+      },
+      "char_filter": {
+        "chinese_mapping": {
+          "type": "mapping",
+          "mappings": [
+            "数据科学 => datascience"
+          ]
+        }
+      },
+      "analyzer": {
+        "my_custom_analyzer": {
+          "type": "custom",
+          "char_filter": [
+            "html_strip",
+            "chinese_mapping"
+          ],
+          "tokenizer": "standard",
+          "filter": [
+            "lowercase",
+            "custom_stop",
+            "asciifolding"
+          ]
+        }
+      }
+    }
+  }
+}
+
+-----------------------------------------------------------------------------------------------------------

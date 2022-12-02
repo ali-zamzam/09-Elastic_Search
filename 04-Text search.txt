@@ -1,0 +1,686 @@
+The available operators are:
+
+gte − greater than equal to
+
+gt − greater than
+
+lte − less than equal to
+
+lt − less than
+
+scroll:
+Elasticsearch returns the first 10000 hits by default.**scroll** allows this limit to be increased by 
+increasing the time before the request times out (1 minute in the example above).
+----------------------------------------------------------------
+***Introduction to research**
+
+- Now that our data is stored in Elasticsearch, we will be able to search for information in it. 
+An API is specific for search: search.
+
+***************
+- GET /<target>/_search
+
+This will allow us to execute DSL (Domain Specific Language) requests based on JSON.
+**************
+
+- These queries are composed of two types of clauses:
+
+- Leaf query clause: Leaf query clauses search for a particular value in a particular field, such as match, 
+term or range type queries. These queries can be used alone.
+
+- Compound query clause: Compound query clauses wrap other queries to combine several of them in a logical way 
+(like boolean queries), or to modify their behaviors (like aggregations, filters, conditions...).
+
+****************************************************
+
+***1- Generic search***
+
+- To facilitate research we will simplify the name of our index. 
+- We cannot change its name within the cluster but we can create an alias. 
+- An alias is a symbolic link between two names. This link will allow us to call our index by its alias 
+and no longer by its original name.
+
+********************
+
+POST _aliases
+{
+  "actions": [
+    {
+      "add": {
+        "index": "reviews_new",
+        "alias": "rev"
+      }
+    }
+  ]
+}
+
+
+we can search now after changed the name of index by an alias
+
+GET /rev/_search
+{
+  "query":{
+    "match_all":{}
+  }
+  
+}
+
+output:
+{
+  "took": 2,
+  "timed_out": false,
+  "_shards": {
+    "total": 2,
+    "successful": 2,
+    "skipped": 0,
+    "failed": 0
+  },
+  "hits": {
+    "total": {
+      "value": 10000,
+      "relation": "gte"
+    },
+    "max_score": 1,
+    "hits": [
+      {
+        "_index": "reviews_new",
+        "_id": "maaFuoMBqh_FDh3ePfoE",
+        "_score": 1,
+        "_source": {
+          "column1": " Hardest part is the constant travel to different parts of the country to visit supplier partners.\"",
+          "column3": "04/01/2020",
+          "column2": "3",
+          "column46": """ Hardest part is the constant travel to different parts of the country to visit supplier partners.",3,04-01-2020"""
+        }
+
+
+- The main part of the results is the **(hits)** object which contains the search results in this object. 
+- We have a **(total)** property containing the number of documents that match the search criteria.
+
+- By default the first 10 documents are returned, each matching document has a **(score)** property which is a number 
+indicating how well the document matches the search query. Since this query matches all results, **the scores are stuck at 1**.
+********************
+--------------------------------------------------------------------------------------------------------------------
+***2- Text research***
+
+- For text search, the query goes through an analyzer and returns the most relevant results thanks to a score. 
+Elasticsearch uses a TF/IDF (inverse document frequency) to calculate the score.
+
+*****************************************
+To do a text search, run this method:
+
+GET /rev/_search
+{
+  "query": {
+    "match": {
+      "CompleteReview": {
+        "query": "Great place to work"
+      }
+    }
+  }
+}
+
+output:
+ "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : 7.855795,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "wypOvYMBIdQjxr0sGFhV",
+        "_score" : 7.855795,
+        "_source" : {
+          "ReviewTitle" : "Great place to work",
+          "CompleteReview" : """Great place to work,Great place to learn,Great place for worklife balance,Great place to explore.
+ regjrgjrgjrwejtkerjtgtkjtryktrjykrtjykrtjkyrtjykerjykrjykrwjykrtkyjkryj.""",
+          "Rating" : "4",
+          "Date" : "24-02-2015"
+        }
+*****************************************
+We can add boolean logic with our query:
+
+GET /rev/_search
+{
+  "query": {
+    "match": {
+      "CompleteReview": {
+        "query": "bad place or good place ?",
+        "operator": "and"
+      }
+    }
+  }
+}
+
+- Two parameters are possible:
+
+OR (Default):
+
+- For example, a query for "bad place or good place" is interpreted as "bad OR place OR or OR good OR place".
+
+AND:
+
+- For example, a query for "bad place or good place" is interpreted as "bad AND place AND or AND good AND place".
+
+
+output:
+    {
+        "_index" : "reviews_new",
+        "_id" : "xipOvYMBIdQjxr0sKeOA",
+        "_score" : 12.6423,
+        "_source" : {
+          "ReviewTitle" : "Good place to learn talent but bad place to earn money",
+          "CompleteReview" : """Its a good company to earn or gain knowledge in terms of hardware and other things
+ 
+ Good working culture according to my storage field support
+ 
+ Flexibility in work timing.
+ 
+ But very bad place to earn money or grow higher...""",
+          "Rating" : "4",
+          "Date" : "02-09-2015"
+        }
+
+we can see that the result contain (good place and bad place) not the last one(without the boolean filter)
+we saw just the reviews contains (good place)
+*******************************************
+You may also want to query a complete sentence instead of splitting the words.
+
+GET /rev/_search
+{
+  "_source": ["CompleteReview"],
+  "query": {
+    "match_phrase": {
+      "CompleteReview": {
+        "query": "The best team ever !"
+      }
+    }
+  },
+  "highlight": {
+    "pre_tags": ["</strong>"],
+    "post_tags": ["</strong>"],
+    "fields": {"CompleteReview": {}}
+  }
+}
+
+output:
+"hits" : {
+    "total" : {
+      "value" : 5,
+      "relation" : "eq"
+    },
+    "max_score" : 9.466838,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "sCpOvYMBIdQjxr0sHYPH",
+        "_score" : 9.466838,
+        "_source" : {
+          "CompleteReview" : "Everyday at work would be awesome . Learnt various leadership skills and activities , management skills. Coworkers are always the best. Had the best team ever. Launch phase was too challenging but succesful. whle of one year was succesful."
+        },
+        "highlight" : {
+          "CompleteReview" : [
+            "Had </strong>the</strong> </strong>best</strong> </strong>team</strong> </strong>ever</strong>."
+          ]
+        }
+      }
+
+- _source: Allow to specify the fields that we want to return in our result
+
+- highlight: Highlight the result for readability. Here the "strong" tags make it possible to highlight the result 
+in bold when the search is carried out on a Web page. This parameter returns the answer in the "highlight" field.
+****************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************************
+
+**You may want to do a search by specifying the **fields** to search:**
+
+GET /rev/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "great place ! ",
+      "fields": ["CompleteReview", "ReviewTitle.keyword"]
+    }
+  }
+}
+
+output:
+ "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : 6.5603733,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "wypOvYMBIdQjxr0sGFhV",
+        "_score" : 6.5603733,
+        "_source" : {
+          "ReviewTitle" : "Great place to work",
+          "CompleteReview" : """Great place to work,Great place to learn,Great place for worklife balance,Great place to explore.
+ regjrgjrgjrwejtkerjtgtkjtryktrjykrtjykrtjkyrtjykerjykrjykrwjykrtkyjkryj.""",
+          "Rating" : "4",
+          "Date" : "24-02-2015"
+        }
+      },
+
+we can see the (great place in review title and complete review)
+************************************************************************************
+Build the following query:
+
+- Research: "not very challenging"
+- Returns only the "ReviewTitle" field
+- Results should be highlighted with the "ul" tag
+- At least one word from the query must be present in the response (we use or)
+
+
+ GET /rev/_search
+{
+  "_source": ["ReviewTitle"],
+  "query": {
+    "match": {
+      "ReviewTitle": {
+        "query": "not very challenging !",
+        "operator": "or"
+      }
+    }
+  },
+  "highlight": {
+    "pre_tags": ["</ul>"],
+    "post_tags": ["</ul>"],
+    "fields": {"ReviewTitle": {}}
+  }
+}
+
+output:
+ "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : 12.492914,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "lSlNvYMBIdQjxr0s_Jrd",
+        "_score" : 12.492914,
+        "_source" : {
+          "ReviewTitle" : "Not very challenging work"
+        },
+        "highlight" : {
+          "ReviewTitle" : [
+            "</ul>Not</ul> </ul>very</ul> </ul>challenging</ul> work"
+          ]
+        }
+      }
+-----------------------------------------------------------------------------------------------------------
+
+****Search by term***
+
+Searching by term is NOT parsed (does not go through an analyzer) by Elasticsearch and returns documents that 
+contain the exact term. Searching by term is less resource intensive.
+
+************************************************
+GET /rev/_search
+{
+  "query":{
+    "term":{
+      "ReviewTitle": "good"
+    }
+  }
+}
+
+output:
+"hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : 2.0322661,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "VStOvYMBIdQjxr0s-hYA",
+        "_score" : 2.0322661,
+        "_source" : {
+          "ReviewTitle" : "Good Good",
+          "CompleteReview" : "Good corporate culture and exposure too. There are many departments. 
+          Mostly operates in KPO and financial services. Internal transfers in different departments are available. Thank you for your positive feedback! Enjoy the rest of your day!",
+          "Rating" : "5",
+          "Date" : "02-09-2021"
+        }
+
+************************************************
+
+GET /rev/_search
+{
+  "query":{
+    "term":{
+      "ReviewTitle.keyword": "good"
+    }
+  }
+}
+
+output:
+
+ "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "JChNvYMBIdQjxr0s29u3",
+        "_score" : 4.8215027,
+        "_source" : {
+          "ReviewTitle" : "good",
+          "CompleteReview" : "one start as the first job as there is more to learn at Vodafone, as interacting with whole lots of crowd every day, that helps to understand customers well.",
+          "Rating" : "3",
+          "Date" : "24-12-2020"
+        }
+      }
+
+
+**the difference between (ReviewTitle and ReviewTitle.keyword)**
+
+- The first query returns a response if the EXACT term "good" is present at least ONCE in the sentence.
+
+- The second query returns answers only the EXACT term "good" is present in the sentence.
+
+- No scoring in both cases
+
+**********************************************
+***(range) filter***
+
+We now want to filter the results and keep only the good notes. 
+For this, we can use the "range" field:
+
+GET /rev/_search?scroll=1m
+{
+  "query": {
+    "range": {
+      "Rating": {
+        "gte": 4
+      }
+    }
+  }
+}
+
+  output:
+{
+  "_scroll_id" : "FGluY2x1ZGVfY29udGV4dF91dWlkDnF1ZXJ5VGhlbkZldGNoAhZLX29FaG9oS1NDR25xd3N0Wm5mbjhnAAAAAAAAG5cWRDRSb2Q5X1ZRYUNnM0VvTkJfTVN3ZxZLX29FaG9oS1NDR25xd3N0Wm5mbjhnAAAAAAAAG5gWRDRSb2Q5X1ZRYUNnM0VvTkJfTVN3Zw==",
+  "took" : 6,
+  "timed_out" : false,
+  "_shards" : {
+    "total" : 2,
+    "successful" : 2,
+    "skipped" : 0,
+    "failed" : 0
+  },
+  "hits" : {
+    "total" : {
+      "value" : 119922,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "jihNvYMBIdQjxr0s29q2",
+        "_score" : 1.0,
+        "_source" : {
+          "ReviewTitle" : "Productive",
+          "CompleteReview" : "I am just pass out bsc in chemistry Typical day at work Mangement Work place good The most enjoyable part of the job I learn more information in company",
+          "Rating" : "5",
+          "Date" : "17-08-2021"
+        
+
+The available operators are:
+
+gte − greater than equal to
+
+gt − greater than
+
+lte − less than equal to
+
+lt − less than
+
+
+Elasticsearch returns the first 10000 hits by default.**scroll** allows this limit to be increased by 
+increasing the time before the request times out (1 minute in the example above).
+**********************************************
+***wildcard***
+***********************
+******(* or ?)*********
+***********************
+
+gr*ta
+gr?t
+
+***Compare these two queries and describe the result:***
+
+# The search returns documents whose ReviewTitle field contains a term starting with "gr" and ending with "t". 
+With "*" matching terms may include "great", "grat", "graaaat".
+
+# The search returns documents whose ReviewTitle field contains a term starting with "gr" and ending 
+with "t" but "?" specifies that only one letter can be replaced. Matching terms may include "grat" or "gret.
+************************************************
+GET /rev/_search
+{
+  "_source": ["ReviewTitle"],
+  "query": {
+    "wildcard": {
+      "ReviewTitle": {
+        "value": "gr*t"
+      }
+    }
+  }
+}
+
+output:
+
+  "hits" : {
+    "total" : {
+      "value" : 10000,
+      "relation" : "gte"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "uyhNvYMBIdQjxr0s29q2",
+        "_score" : 1.0,
+        "_ignored" : [
+          "CompleteReview.keyword"
+        ],
+        "_source" : {
+          "ReviewTitle" : "great place to work, great work experience"
+        }
+      }
+
+
+
+GET /rev/_search
+{
+  "_source": ["ReviewTitle"],
+  "query": {
+    "wildcard": {
+      "ReviewTitle": {
+        "value": "gr?t"
+      }
+    }
+  }
+}
+
+
+output:
+ "hits" : {
+    "total" : {
+      "value" : 10,
+      "relation" : "eq"
+    },
+    "max_score" : 1.0,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "ESlNvYMBIdQjxr0s5RDG",
+        "_score" : 1.0,
+        "_source" : {
+          "ReviewTitle" : "its a grrt place to work when i ws thre at 2013..  grtt team grrt pple.."
+        }
+      }
+
+********************************************
+--------------------------------------------------------------------------------------------------------------------
+***Boolean operators***
+
+- This type of search allows you to create more complex queries based on conditions, here is an example:
+
+GET /rev/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "CompleteReview": "horrible"
+          }
+        }
+      ],
+      "filter": [
+        {
+          "range": {
+            "Date": {
+              "gte": "01-01-2014",
+              "lte": "31-12-2014"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+output:
+ "hits" : {
+    "total" : {
+      "value" : 6,
+      "relation" : "eq"
+    },
+    "max_score" : 9.872319,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "tSlOvYMBIdQjxr0sCNJs",
+        "_score" : 9.872319,
+        "_source" : {
+          "ReviewTitle" : "good firm to begin your career",
+          "CompleteReview" : """good firm to begin career
+ Low compensation
+ Horrible transport""",
+          "Rating" : "3",
+          "Date" : "14-09-2014"
+        }
+      }
+
+However, we wanted the bad reviews with the word "awful", so this query is not optimized. 
+Indeed, there remain neutral elements. To avoid this, we can add a must_not clause and add the terms to ban.
+
+
+
+
+GET /rev/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "CompleteReview": "horrible"
+          }
+        }
+      ],
+      "must_not": [
+        {
+          "terms": {
+            "CompleteReview": [
+              "good",
+              "great"
+            ]
+          }
+        }
+      ],
+      "filter": [
+        {
+          "range": {
+            "Date": {
+              "gte": "01-01-2014",
+              "lte": "31-12-2014"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+output:
+ "hits" : {
+    "total" : {
+      "value" : 3,
+      "relation" : "eq"
+    },
+    "max_score" : 8.754123,
+    "hits" : [
+      {
+        "_index" : "reviews_new",
+        "_id" : "0ypOvYMBIdQjxr0sK_F1",
+        "_score" : 8.754123,
+        "_source" : {
+          "ReviewTitle" : "Job Function",
+          "CompleteReview" : "Nature of job was horrible. No future growth at all. Not a suitable company to work with.",
+          "Rating" : "1",
+          "Date" : "09-03-2014"
+        }
+
+now we had the result without (good or great in it)
+
+Use case:
+
+A company wants to display bad reviews on its website. According to the marketing department, 
+the words most often used to write such reviews are "bad and "worst". But the company wants to filter 
+out all negative reviews.
+***************************************************
+https://www.elastic.co/guide/en/elasticsearch/reference/current/query-dsl-bool-query.html
+
+
+Write a query that meets the business need. You can use the should clause for your boolean query.
+
+GET /rev/_search?scroll=1m
+{
+  "query": {
+    "bool": {
+      "should": [
+        {
+          "terms": {
+            "CompleteReview": [
+              "bad",
+              "worst"
+            ]
+          }
+        }
+      ],
+      "filter": [
+        {
+          "range": {
+            "Rating": {
+              "lte": 2
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+----------------------------------------------------------------------------------------------------------
